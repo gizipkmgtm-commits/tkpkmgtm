@@ -55,6 +55,27 @@ button {
 .bad { color:red; font-weight:bold; }
 .warn { color:orange; font-weight:bold; }
 .good { color:green; font-weight:bold; }
+
+/* AUTOCOMPLETE */
+#suggestions {
+  position:absolute;
+  background:white;
+  width:100%;
+  border-radius:10px;
+  box-shadow:0 4px 10px rgba(0,0,0,0.1);
+  max-height:200px;
+  overflow-y:auto;
+  z-index:10;
+}
+
+.suggestion-item {
+  padding:10px;
+  cursor:pointer;
+}
+
+.suggestion-item:hover {
+  background:#f1f1f1;
+}
 </style>
 </head>
 
@@ -65,8 +86,10 @@ button {
 <form>
 
 <label>Nama Balita</label>
-<input list="listNama" id="nama" placeholder="Ketik nama">
-<datalist id="listNama"></datalist>
+<div style="position:relative;">
+  <input type="text" id="nama" placeholder="Ketik nama..." autocomplete="off">
+  <div id="suggestions"></div>
+</div>
 
 <label>NIK</label>
 <input type="text" id="nik" readonly>
@@ -111,45 +134,64 @@ const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxOjla8ZZg5dt6s-dlV
 // ================= LOAD CSV
 let masterData = [];
 
-fetch("data_balita.csv")
+fetch("./data_balita.csv")
   .then(res => res.text())
   .then(text => {
     const rows = text.split("\n").slice(1);
 
     rows.forEach(row => {
+      if(!row || row.includes("<!DOCTYPE")) return;
+
       let [nama, nik, tgl, sekolah] = row.split(",");
 
+      function bersih(x){ return x?.replace(/"/g,"").trim(); }
+
+      if(!nama) return;
+
       masterData.push({
-        nama: nama?.trim(),
-        nik: nik?.trim(),
-        tgl: tgl?.trim(),
-        sekolah: sekolah?.trim()
+        nama: bersih(nama),
+        nik: bersih(nik),
+        tgl: bersih(tgl),
+        sekolah: bersih(sekolah)
       });
     });
-
-    isiDatalist();
   });
 
-// ================= DATAlIST
-function isiDatalist(){
-  const list = document.getElementById("listNama");
+// ================= AUTOCOMPLETE
+const inputNama = document.getElementById("nama");
+const box = document.getElementById("suggestions");
 
-  masterData.forEach(d => {
-    let opt = document.createElement("option");
-    opt.value = d.nama;
-    list.appendChild(opt);
+inputNama.addEventListener("input", function(){
+  let val = this.value.toLowerCase();
+  box.innerHTML = "";
+
+  if(val.length < 1) return;
+
+  let hasil = masterData.filter(d =>
+    d.nama.toLowerCase().includes(val)
+  );
+
+  hasil.forEach(d => {
+    let div = document.createElement("div");
+    div.className = "suggestion-item";
+    div.innerText = d.nama;
+
+    div.onclick = function(){
+      inputNama.value = d.nama;
+      document.getElementById("nik").value = d.nik;
+      document.getElementById("tgl").value = d.tgl;
+      document.getElementById("sekolah").value = d.sekolah;
+      box.innerHTML = "";
+    };
+
+    box.appendChild(div);
   });
-}
+});
 
-// ================= AUTOFILL
-document.getElementById("nama").addEventListener("input", function(){
-  let val = this.value;
-  let data = masterData.find(d => d.nama === val);
-
-  if(data){
-    document.getElementById("nik").value = data.nik;
-    document.getElementById("tgl").value = data.tgl;
-    document.getElementById("sekolah").value = data.sekolah;
+// klik luar
+document.addEventListener("click", function(e){
+  if(!e.target.closest("#suggestions") && e.target !== inputNama){
+    box.innerHTML = "";
   }
 });
 
@@ -179,7 +221,6 @@ function statusBBTB(bb, tb){
   return "Normal";
 }
 
-// ================= WARNA
 function classStatus(text){
   if(text.includes("Kurang") || text.includes("Pendek") || text.includes("Kurus")) return "bad";
   if(text.includes("Lebih") || text.includes("Gemuk") || text.includes("Tinggi")) return "warn";
@@ -204,7 +245,6 @@ function simpan(){
   let tbu = statusTBU(tb, u);
   let bbtb = statusBBTB(bb, tb);
 
-  // tampilkan hasil
   document.getElementById("hasilBox").style.display="block";
   document.getElementById("hasilText").innerHTML = `
     <b>Nama:</b> ${nama}<br><br>
@@ -214,7 +254,6 @@ function simpan(){
     <small>Umur: ${u} bulan</small>
   `;
 
-  // upload foto + kirim
   let file = document.getElementById("foto").files[0];
 
   if(file){
@@ -228,9 +267,8 @@ function simpan(){
   }
 }
 
-// ================= KIRIM KE SPREADSHEET
+// ================= KIRIM DATA
 function kirimData(foto){
-
   fetch(WEB_APP_URL,{
     method:"POST",
     body:JSON.stringify({
@@ -249,8 +287,8 @@ function kirimData(foto){
       foto: foto
     })
   })
-  .then(()=> alert("✅ Data berhasil tersimpan ke Spreadsheet"))
-  .catch(()=> alert("❌ Gagal kirim data"));
+  .then(()=> alert("✅ Data masuk spreadsheet"))
+  .catch(()=> alert("❌ Gagal kirim"));
 }
 </script>
 
