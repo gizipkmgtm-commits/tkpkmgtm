@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Status Gizi Balita</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
+<style>
+body { font-family:'Inter', sans-serif; background:#f4f6f9; margin:0; }
+
+header {
+  background:#4e73df;
+  color:white;
+  text-align:center;
+  padding:15px;
+  font-size:18px;
+}
+
+form {
+  background:white;
+  margin:10px;
+  padding:15px;
+  border-radius:12px;
+}
+
+input, select {
+  width:100%;
+  padding:12px;
+  margin-top:8px;
+  border-radius:10px;
+  border:1px solid #ccc;
+}
+
+button {
+  width:100%;
+  padding:14px;
+  margin-top:15px;
+  border:none;
+  border-radius:10px;
+  background:#4e73df;
+  color:white;
+  font-weight:bold;
+}
+
+#hasilBox {
+  display:none;
+  background:white;
+  margin:10px;
+  padding:15px;
+  border-radius:12px;
+}
+
+.bad { color:red; font-weight:bold; }
+.warn { color:orange; font-weight:bold; }
+.good { color:green; font-weight:bold; }
+</style>
+</head>
+
+<body>
+
+<header>📊 Status Gizi Balita</header>
+
+<form>
+
+<label>Nama Balita</label>
+<input list="listNama" id="nama" placeholder="Ketik nama">
+<datalist id="listNama"></datalist>
+
+<label>NIK</label>
+<input type="text" id="nik" readonly>
+
+<label>Tanggal Lahir</label>
+<input type="date" id="tgl">
+
+<label>Sekolah</label>
+<input type="text" id="sekolah" readonly>
+
+<label>Nama Orang Tua</label>
+<input type="text" id="ortu">
+
+<label>Jenis Kelamin</label>
+<select id="jk">
+<option value="L">Laki-laki</option>
+<option value="P">Perempuan</option>
+</select>
+
+<label>Berat Badan (kg)</label>
+<input type="number" id="bb">
+
+<label>Tinggi Badan (cm)</label>
+<input type="number" id="tb">
+
+<label>Upload Foto</label>
+<input type="file" id="foto" accept="image/*">
+
+<button type="button" onclick="simpan()">Simpan Data</button>
+
+</form>
+
+<div id="hasilBox">
+  <b>Hasil Status Gizi</b>
+  <div id="hasilText"></div>
+</div>
+
+<script>
+// ================= URL GOOGLE SCRIPT
+const WEB_APP_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSyI_QTm27WC3SusaUD3EG9znryDbJEL1Psht7g_A7SfX1cTSkkOo1J_1FRYWYzmFaELONcARoyH3-a/pub?gid=0&single=true&output=csv";
+
+// ================= LOAD CSV
+let masterData = [];
+
+fetch("data_balita.csv")
+  .then(res => res.text())
+  .then(text => {
+    const rows = text.split("\n").slice(1);
+
+    rows.forEach(row => {
+      let [nama, nik, tgl, sekolah] = row.split(",");
+
+      masterData.push({
+        nama: nama?.trim(),
+        nik: nik?.trim(),
+        tgl: tgl?.trim(),
+        sekolah: sekolah?.trim()
+      });
+    });
+
+    isiDatalist();
+  });
+
+// ================= DATAlIST
+function isiDatalist(){
+  const list = document.getElementById("listNama");
+
+  masterData.forEach(d => {
+    let opt = document.createElement("option");
+    opt.value = d.nama;
+    list.appendChild(opt);
+  });
+}
+
+// ================= AUTOFILL
+document.getElementById("nama").addEventListener("input", function(){
+  let val = this.value;
+  let data = masterData.find(d => d.nama === val);
+
+  if(data){
+    document.getElementById("nik").value = data.nik;
+    document.getElementById("tgl").value = data.tgl;
+    document.getElementById("sekolah").value = data.sekolah;
+  }
+});
+
+// ================= UMUR
+function umur(t){
+  let d=new Date(t), n=new Date();
+  return (n.getFullYear()-d.getFullYear())*12+(n.getMonth()-d.getMonth());
+}
+
+// ================= STATUS
+function statusBBU(bb, umur){
+  if(bb < (umur*0.4 + 2)) return "Gizi Kurang";
+  if(bb > (umur*0.6 + 8)) return "Gizi Lebih";
+  return "Gizi Baik";
+}
+
+function statusTBU(tb, umur){
+  if(tb < (umur*1.2 + 45)) return "Pendek (Stunting)";
+  if(tb > (umur*1.8 + 55)) return "Tinggi";
+  return "Normal";
+}
+
+function statusBBTB(bb, tb){
+  let bmi = bb / ((tb/100)*(tb/100));
+  if(bmi < 14) return "Kurus (Wasting)";
+  if(bmi > 18) return "Gemuk";
+  return "Normal";
+}
+
+// ================= WARNA
+function classStatus(text){
+  if(text.includes("Kurang") || text.includes("Pendek") || text.includes("Kurus")) return "bad";
+  if(text.includes("Lebih") || text.includes("Gemuk") || text.includes("Tinggi")) return "warn";
+  return "good";
+}
+
+// ================= SIMPAN
+function simpan(){
+
+  let nama = document.getElementById("nama").value;
+  let nik = document.getElementById("nik").value;
+  let sekolah = document.getElementById("sekolah").value;
+  let ortu = document.getElementById("ortu").value;
+  let tgl = document.getElementById("tgl").value;
+  let jk = document.getElementById("jk").value;
+  let bb = parseFloat(document.getElementById("bb").value);
+  let tb = parseFloat(document.getElementById("tb").value);
+
+  let u = umur(tgl);
+
+  let bbu = statusBBU(bb, u);
+  let tbu = statusTBU(tb, u);
+  let bbtb = statusBBTB(bb, tb);
+
+  // tampilkan hasil
+  document.getElementById("hasilBox").style.display="block";
+  document.getElementById("hasilText").innerHTML = `
+    <b>Nama:</b> ${nama}<br><br>
+    <b>BB/U:</b> <span class="${classStatus(bbu)}">${bbu}</span><br>
+    <b>TB/U:</b> <span class="${classStatus(tbu)}">${tbu}</span><br>
+    <b>BB/TB:</b> <span class="${classStatus(bbtb)}">${bbtb}</span><br><br>
+    <small>Umur: ${u} bulan</small>
+  `;
+
+  // upload foto + kirim
+  let file = document.getElementById("foto").files[0];
+
+  if(file){
+    const reader = new FileReader();
+    reader.onload = function(){
+      kirimData(reader.result);
+    };
+    reader.readAsDataURL(file);
+  }else{
+    kirimData("");
+  }
+}
+
+// ================= KIRIM KE SPREADSHEET
+function kirimData(foto){
+
+  fetch(WEB_APP_URL,{
+    method:"POST",
+    body:JSON.stringify({
+      nama: document.getElementById("nama").value,
+      nik: document.getElementById("nik").value,
+      sekolah: document.getElementById("sekolah").value,
+      ortu: document.getElementById("ortu").value,
+      tgl: document.getElementById("tgl").value,
+      umur: umur(document.getElementById("tgl").value),
+      jk: document.getElementById("jk").value,
+      bb: document.getElementById("bb").value,
+      tb: document.getElementById("tb").value,
+      bbu: statusBBU(parseFloat(document.getElementById("bb").value), umur(document.getElementById("tgl").value)),
+      tbu: statusTBU(parseFloat(document.getElementById("tb").value), umur(document.getElementById("tgl").value)),
+      bbtb: statusBBTB(parseFloat(document.getElementById("bb").value), parseFloat(document.getElementById("tb").value)),
+      foto: foto
+    })
+  })
+  .then(()=> alert("✅ Data berhasil tersimpan ke Spreadsheet"))
+  .catch(()=> alert("❌ Gagal kirim data"));
+}
+</script>
+
+</body>
+</html>
